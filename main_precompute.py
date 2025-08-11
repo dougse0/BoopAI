@@ -3,19 +3,14 @@ import time
 
 class BoopGame:
     ID_LIST = (-1, 1)
-    NEIGHBORS = (
-        (1,1),
-        (1,0),
-        (1,-1),
-        (0,1),
-        (0,-1),
-        (-1,1),
-        (-1,0),
-        (-1,-1)
-    )
+    NEIGHBORS = np.array([
+        (1, 1), (1, 0), (1, -1),
+        (0, 1), (0, -1),
+        (-1, 1), (-1, 0), (-1, -1)
+    ], dtype=np.int8)
 
     def __init__(self):
-        self.board = np.zeros((6,6), dtype=np.int8)
+        self.board = np.zeros((6, 6), dtype=np.int8)
         self.turn = 1
         self.TRIPLETS = self._generate_triplets()
 
@@ -31,45 +26,52 @@ class BoopGame:
                     triplets.append([(x+i, y+i) for i in range(3)])
                 if x <= 3 and y >= 2:
                     triplets.append([(x+i, y-i) for i in range(3)])
-        return np.array(triplets, dtype=np.int8)   
-    
-    def __repr__(self):        
+        return np.array(triplets, dtype=np.int8)  # Shape: (N, 3, 2)
+
+    def __repr__(self):
         return str(self.board)
-    
-    def in_bounds(self,x, y):
+
+    def in_bounds(self, x, y):
         return 0 <= x < 6 and 0 <= y < 6
 
     def make_move(self, x, y, playerID):
         assert playerID in self.ID_LIST, "Invalid player ID"
-        assert self.board[x, y] == 0, f"Space Occupied at ({x}, {y}) by {self.board[x,y]}"
+        assert self.board[x, y] == 0, f"Space Occupied at ({x}, {y})"
 
+        # Boop logic
         for dx, dy in self.NEIGHBORS:
-            nx, ny = x+dx, y+dy 
-            # check if occupied
-            if self.in_bounds(nx,ny) and self.board[nx,ny] != 0:
-                # check if boop square is open
-                nnx, nny = nx+dx, ny+dy 
+            nx, ny = x + dx, y + dy
+            if self.in_bounds(nx, ny) and self.board[nx, ny] != 0:
+                nnx, nny = nx + dx, ny + dy
                 if self.in_bounds(nnx, nny):
-                    if self.board[nnx,nny] == 0:
-                        self.board[nnx,nny] = self.board[nx,ny]
-                        self.board[nx,ny] = 0
+                    if self.board[nnx, nny] == 0:
+                        self.board[nnx, nny] = self.board[nx, ny]
+                        self.board[nx, ny] = 0
                 else:
                     self.board[nx, ny] = 0
-        self.board[x,y] = playerID
+
+        self.board[x, y] = playerID
         # print(self.board)
-        # if x:= self.check_winner():
-        #     print(f'Player: {x} wins!')
+
+        winner = self.check_winner()
+        if winner:
+            return
+            # print(f'Player: {winner} wins!')
 
     def check_winner(self):
-        """Fast check using precomputed triplets."""
-        b = self.board
-        for triplet in self.TRIPLETS:
-            vals = [b[x, y] for x, y in triplet]
-            if vals[0] != 0 and vals.count(vals[0]) == 3:
-                return vals[0]
+        """Vectorized winner check using precomputed triplets."""
+        coords = self.TRIPLETS  # (N, 3, 2)
+        bvals = self.board[coords[:, :, 0], coords[:, :, 1]]  # (N, 3)
+
+        # Check if all values in triplet are equal and nonzero
+        is_equal = (bvals[:, 0] == bvals[:, 1]) & (bvals[:, 1] == bvals[:, 2])
+        non_zero = bvals[:, 0] != 0
+        mask = is_equal & non_zero
+
+        if np.any(mask):
+            return bvals[mask][0, 0]  # Return the winning ID
         return 0
 
-        
 def benchmark_random_games(num_games=1000, max_moves=50):
     game = BoopGame()
     moves_made = 0
